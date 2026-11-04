@@ -1,0 +1,158 @@
+# validate.moth's tests: moth test validate.test.moth
+
+use "validate.moth" as validate
+use "text.moth" as text
+
+to signup_rules
+    set rules to validate's rules()
+    validate's field(rules, "name", "text")
+    validate's field(rules, "age", "whole number")
+    validate's field(rules, "email", "email")
+    validate's optional(rules, "website", "address")
+    validate's optional(rules, "news", "yes or no", no)
+    validate's at_most(rules, "name", 10)
+    validate's at_least(rules, "age", 13)
+    return rules
+end
+
+to test_a_good_form
+    set given to dictionary where "name" is "  Sam ", "age" is "20", "email" is "sam@example.com", "news" is "on",
+        "extra" is "left out"
+    set result to validate's checked(signup_rules(), given)
+    expect result's ok
+    expect result's problems is empty dictionary
+    expect result's first_problem is nothing
+    expect result's values is dictionary where "name" is "Sam", "age" is 20, "email" is "sam@example.com",
+        "website" is nothing, "news" is yes
+end
+
+to test_a_form_with_problems
+    set given to dictionary where "name" is "Someone with a long name", "age" is "twelve", "email" is "not an email",
+        "website" is "ftp://x"
+    set result to validate's checked(signup_rules(), given)
+    expect not result's ok
+    expect result's problems is dictionary where "name" is "name can be at most 10 letters long",
+        "age" is "age must be a whole number", "email" is "email must be an email address",
+        "website" is "website must be a web address, starting with http:// or https://"
+    expect result's first_problem is "name can be at most 10 letters long"
+    set missing to validate's checked(signup_rules(), dictionary where "name" is "", "age" is 12.5)
+    expect missing's problems is dictionary where "name" is "name is needed", "age" is "age must be a whole number",
+        "email" is "email is needed"
+    expect item "age" of validate's checked(signup_rules(), record with age 12)'s problems is "age must be at least 13"
+end
+
+to test_records_and_json
+    set result to validate's checked(signup_rules(), record with name "Ana", age 31, email "ana@x.org", news no)
+    expect result's ok
+    expect item "news" of result's values is no
+    set from_json to validate's checked(signup_rules(), json from "{\"name\": \"Bo\", \"age\": 40, \"email\": \"b@x.io\"}")
+    expect from_json's ok
+end
+
+to test_kinds
+    set rules to validate's rules()
+    validate's field(rules, "n", "number")
+    validate's field(rules, "flag", "yes or no")
+    validate's field(rules, "day", "date")
+    validate's field(rules, "tags", "list")
+    validate's field(rules, "meta", "dictionary")
+    validate's field(rules, "anything", "any")
+    validate's field(rules, "site", "address")
+    set given to record with n "-2.5", flag "False", day "2026-11-04", tags (list of "a"), meta (record with x 1),
+        anything 3, site "https://example.com/a?b=c"
+    set result to validate's checked(rules, given)
+    expect result's ok
+    expect item "n" of result's values is -2.5
+    expect item "flag" of result's values is no
+    expect item "day" of result's values is record with year 2026, month 11, day 4
+    expect item "meta" of result's values is dictionary where "x" is 1
+    set wrong to validate's checked(rules, record with n yes, flag "maybe", day "4 Nov", tags "a", meta 1, anything 1,
+        site "example.com")
+    expect wrong's problems is dictionary where "n" is "n must be a number", "flag" is "flag must be yes or no",
+        "day" is "day must be a date, as 2026-11-04", "tags" is "tags must be a list",
+        "meta" is "meta must be a record or a dictionary",
+        "site" is "site must be a web address, starting with http:// or https://"
+end
+
+to test_choices_patterns_and_checks
+    set rules to validate's rules()
+    validate's field(rules, "size", "text")
+    validate's one_of(rules, "size", list of "S", "M", "L")
+    validate's field(rules, "code", "text")
+    validate's check(rules, "code", function with v gives text's matches("^[A-Z]{3}$", v), "must be three capital letters")
+    validate's field(rules, "password", "text")
+    validate's check(rules, "password", function with p gives length of p is at least 8, "needs 8 letters or more")
+    validate's field(rules, "tags", "list")
+    validate's at_most(rules, "tags", 2)
+    set good to validate's checked(rules, record with size "M", code "ABC", password "long enough", tags empty list)
+    expect good's ok
+    set bad to validate's checked(rules, record with size "XL", code "abc", password "short", tags (list of 1, 2, 3))
+    expect bad's problems is dictionary where "size" is "size must be S, M or L",
+        "code" is "code must be three capital letters", "password" is "password needs 8 letters or more",
+        "tags" is "tags can be at most 2 items"
+end
+
+to test_messages_of_your_own
+    set rules to validate's rules()
+    validate's field(rules, "email", "email")
+    validate's message(rules, "email", "Please give an email address we can write to.")
+    expect validate's checked(rules, empty dictionary)'s first_problem is "Please give an email address we can write to."
+    expect validate's checked(rules, record with email "x")'s first_problem is "Please give an email address we can write to."
+end
+
+to test_rules_inside_rules
+    set address to validate's rules()
+    validate's field(address, "town", "text")
+    validate's field(address, "pin", "whole number")
+    set person to validate's rules()
+    validate's field(person, "name", "text")
+    validate's field(person, "home", address)
+    set good to validate's checked(person, record with name "Sam", home (record with town "Pune", pin "411001"))
+    expect good's ok
+    expect item "home" of good's values is dictionary where "town" is "Pune", "pin" is 411001
+    set bad to validate's checked(person, record with name "Sam", home (record with pin "x"))
+    expect bad's problems is dictionary where "home.town" is "home.town is needed", "home.pin" is "home.pin must be a whole number"
+    expect validate's checked(person, record with name "Sam", home "Pune")'s problems is dictionary where "home" is "home must be a record or a dictionary"
+end
+
+to test_one_value
+    expect validate's is_email("sam@example.com")
+    expect validate's is_email("first.last+tag@mail.example.co.in")
+    expect not validate's is_email("sam@.com")
+    expect not validate's is_email("sam@example.")
+    for each bad in list of "sam", "sam@", "@example.com", "sam@example", "sa m@example.com", "sam@@example.com",
+        "sam@example..com"
+        expect not validate's is_email(bad)
+    end
+    expect validate's is_address("https://example.com")
+    expect validate's is_address("HTTP://example.com/a b") is no
+    expect not validate's is_address("example.com")
+    expect not validate's is_address("javascript:alert(1)")
+    expect not validate's is_address("https://")
+    expect not validate's is_address("https:///path")
+    expect validate's is_address("http://localhost:8080/a?b#c")
+end
+
+to test_mistakes_in_rules
+    set rules to validate's rules()
+    validate's field(rules, "a", "text")
+    for each pair in list of (list of "a", "the rules have the field 'a' twice"), (list of "b",
+        "'colour' isn't a kind of field: it's one of text, number, whole number, yes or no, email, address, date, list, dictionary or any, or rules of their own")
+        try
+            if item 1 of pair is "a"
+                validate's field(rules, "a", "text")
+            else
+                validate's field(rules, "b", "colour")
+            end
+            expect no
+        if it fails with why
+            expect why is item 2 of pair
+        end
+    end
+    try
+        validate's at_most(rules, "nope", 3)
+        expect no
+    if it fails with why
+        expect why is "the rules have no field 'nope': add it with field or optional first"
+    end
+end

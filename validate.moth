@@ -1,0 +1,471 @@
+# Checks for what a program is given (a form's fields, JSON a request sent, a settings file), with a message
+# for each field that's wrong, and the values made the kinds they should be: "42" from a form is 42, "on" from
+# a checkbox is yes. In Moth alone, so it works everywhere.
+#
+#   use the package "validate" as validate
+#   set rules to validate's rules()
+#   validate's field(rules, "name", "text")                   # needed, and text
+#   validate's field(rules, "age", "whole number")
+#   validate's field(rules, "email", "email")
+#   validate's optional(rules, "website", "address")          # may be left out or empty
+#   validate's optional(rules, "news", "yes or no", no)       # and what it is then
+#   validate's at_most(rules, "name", 40)                     # letters, for text; the value, for a number
+#   validate's at_least(rules, "age", 13)
+#   validate's one_of(rules, "size", list of "S", "M", "L")
+#   validate's check(rules, "password", function with p gives length of p is at least 8, "needs 8 letters or more")
+#
+#   set result to validate's checked(rules, given)            # given: a record or a dictionary
+#   if result's ok
+#       say item "age" of result's values                     # a number
+#   else
+#       say result's first_problem                            # age must be a whole number
+#       for each name in result's problems                    # each field that's wrong, and why
+#           say name ": " item name of result's problems
+#       end
+#   end
+#
+# A field's kind is "text", "number", "whole number", "yes or no", "email", "address" (an http:// or https://
+# one), "date" ("2026-11-04", made a date as dates.moth makes them), "list", "dictionary", "any", or rules of
+# their own, for a field that holds a record or dictionary: its problems are named "outer.inner". Text is taken
+# with the spaces at its ends left out, and a needed field that's empty text is missing, as a form sends one.
+# message(rules, name, words) puts words in place of every message for that field. Fields the rules don't
+# name are left out of the values. is_email(words) and is_address(words) check one value.
+
+# rules with no fields yet
+to rules
+    return record with kind "rules", fields empty list
+end
+
+# a field that has to be there, of a kind
+to field with rules, name, kind_of
+    validate_add(rules, name, kind_of, yes, nothing)
+end
+
+# a field that may be left out, or empty; its value is then `otherwise`
+to optional with rules, name, kind_of, otherwise or nothing
+    validate_add(rules, name, kind_of, no, otherwise)
+end
+
+to validate_add with rules, name, kind_of, needed, otherwise
+    if not (validate_is_rules(kind_of) or kind_of is in validate_kinds())
+        fail with "'" + kind_of + "' isn't a kind of field: it's one of " + validate_listed(validate_kinds(), "or")
+            + ", or rules of their own"
+    end
+    set kept to rules's fields
+    for each one in kept
+        if one's name is name
+            fail with "the rules have the field '" + name + "' twice"
+        end
+    end
+    add (record with name name, kind_of kind_of, needed needed, otherwise otherwise, checks empty list, said nothing)
+        to kept
+end
+
+to validate_kinds
+    return list of "text", "number", "whole number", "yes or no", "email", "address", "date", "list", "dictionary",
+        "any"
+end
+
+to validate_is_rules with value
+    try
+        return value's kind is "rules"
+    if it fails
+        return no
+    end
+end
+
+# what's said instead of any of the field's own messages
+to message with rules, name, words
+    set one to validate_field(rules, name)
+    set one's said to words
+end
+
+# text of at most n letters, a number of at most n, or a list of at most n items
+to at_most with rules, name, n
+    validate_check(rules, name, function with v gives validate_size(v) is at most n, "can be at most " + n
+        + validate_unit(rules, name, n))
+end
+
+to at_least with rules, name, n
+    validate_check(rules, name, function with v gives validate_size(v) is at least n, "must be at least " + n
+        + validate_unit(rules, name, n))
+end
+
+to validate_size with v
+    try
+        return v - 0
+    if it fails
+        return length of v
+    end
+end
+
+to validate_unit with rules, name, n
+    set one to validate_field(rules, name)
+    set kind_of to one's kind_of
+    if kind_of is "text" or kind_of is "email" or kind_of is "address"
+        if n is 1
+            return " letter long"
+        end
+        return " letters long"
+    else if kind_of is "list"
+        if n is 1
+            return " item"
+        end
+        return " items"
+    end
+    return ""
+end
+
+# one of these values
+to one_of with rules, name, choices
+    validate_check(rules, name, function with v gives v is in choices, "must be " + validate_listed(choices, "or"))
+end
+
+# any check: a function of the value that gives yes when it's right, and what's wrong when it isn't
+to check with rules, name, test, why
+    validate_check(rules, name, test, why)
+end
+
+to validate_check with rules, name, test, why
+    set one to validate_field(rules, name)
+    set kept to one's checks
+    add (record with test test, why why) to kept
+end
+
+to validate_field with rules, name
+    for each one in rules's fields
+        if one's name is name
+            return one
+        end
+    end
+    fail with "the rules have no field '" + name + "': add it with field or optional first"
+end
+
+# ---------- checking ----------
+
+# what was given, checked: a record of ok (yes or no), values (a dictionary of each field's value, made its
+# kind), problems (a dictionary of each wrong field's message, in the rules' order) and first_problem (the
+# first message, or nothing)
+to checked with rules, given
+    set problems to empty dictionary
+    set values to validate_checked_into(rules, validate_plain(given), "", problems)
+    set first to nothing
+    for each name in problems
+        if first is nothing
+            set first to item name of problems
+        end
+    end
+    return record with ok length of problems is 0, values values, problems problems, first_problem first
+end
+
+to validate_checked_into with rules, given, prefix, problems
+    set values to empty dictionary
+    if validate_sort(given) is not "dictionary"
+        set item (prefix + "value") of problems to "what was given must be a record or a dictionary"
+        return values
+    end
+    for each one in rules's fields
+        set name to one's name
+        set label to prefix + name
+        set value to nothing
+        if name is in given
+            set value to item name of given
+        end
+        if validate_sort(value) is "text"
+            set value to validate_trimmed(value)
+        end
+        if value is nothing or value is ""
+            if one's needed
+                set item label of problems to validate_said(one, label + " is needed")
+            else
+                set item name of values to one's otherwise
+            end
+        else
+            set made to validate_made(one, value, label, problems)
+            if made's ok
+                set why to nothing
+                for each c in one's checks
+                    if why is nothing
+                        set test to c's test
+                        set passed to no
+                        try
+                            set passed to test(made's value) is yes
+                        if it fails
+                            set passed to no
+                        end
+                        if not passed
+                            set why to c's why
+                        end
+                    end
+                end
+                if why is nothing
+                    set item name of values to made's value
+                else
+                    set item label of problems to validate_said(one, label + " " + why)
+                end
+            end
+        end
+    end
+    return values
+end
+
+to validate_said with one, words
+    if one's said is not nothing
+        return one's said
+    end
+    return words
+end
+
+# the value made the field's kind, or a problem kept: a record of ok and value
+to validate_made with one, value, label, problems
+    set kind_of to one's kind_of
+    set sort to validate_sort(value)
+    set made to nothing
+    if validate_is_rules(kind_of)
+        if sort is "dictionary"
+            return record with ok yes, value validate_checked_into(kind_of, value, label + ".", problems)
+        end
+        return validate_wrong(one, label, "must be a record or a dictionary", problems)
+    end
+    if kind_of is "any"
+        set made to value
+    else if kind_of is "text"
+        if sort is "text"
+            set made to value
+        end
+    else if kind_of is "number" or kind_of is "whole number"
+        if sort is "number"
+            set made to value
+        else if sort is "text"
+            try
+                set made to number of value
+            if it fails
+                set made to nothing
+            end
+        end
+        if made is not nothing and kind_of is "whole number" and not (made is divisible by 1)
+            set made to nothing
+        end
+    else if kind_of is "yes or no"
+        if sort is "yes or no"
+            set made to value
+        else if sort is "text" or sort is "number"
+            set written to lowercase of ("" + value)
+            if written is in list of "yes", "true", "on", "1", "y"
+                set made to yes
+            else if written is in list of "no", "false", "off", "0", "n"
+                set made to no
+            end
+        end
+    else if kind_of is "email"
+        if sort is "text" and is_email(value)
+            set made to value
+        end
+    else if kind_of is "address"
+        if sort is "text" and is_address(value)
+            set made to value
+        end
+    else if kind_of is "date"
+        if sort is "text"
+            try
+                set made to validate_date(value)
+            if it fails
+                set made to nothing
+            end
+        end
+    else if kind_of is "list"
+        if sort is "list"
+            set made to value
+        end
+    else if kind_of is "dictionary"
+        if sort is "dictionary"
+            set made to value
+        end
+    end
+    if made is nothing
+        return validate_wrong(one, label, "must be " + validate_a(kind_of), problems)
+    end
+    return record with ok yes, value made
+end
+
+to validate_wrong with one, label, why, problems
+    set item label of problems to validate_said(one, label + " " + why)
+    return record with ok no, value nothing
+end
+
+to validate_a with kind_of
+    match kind_of
+        when "text"
+            return "text"
+        when "email"
+            return "an email address"
+        when "address"
+            return "a web address, starting with http:// or https://"
+        when "date"
+            return "a date, as 2026-11-04"
+        when "yes or no"
+            return "yes or no"
+        when "list"
+            return "a list"
+        when "dictionary"
+            return "a record or a dictionary"
+    end
+    return "a " + kind_of
+end
+
+# ---------- one value ----------
+
+# whether the text is an email address: something, an @, and a name with a dot in it, with no spaces
+to is_email with words
+    set given to "" + words
+    set parts to split given by "@"
+    if length of parts is not 2 or item 1 of parts is "" or validate_has_space(given)
+        return no
+    end
+    set names to split (item 2 of parts) by "."
+    if length of names is less than 2
+        return no
+    end
+    for each name in names
+        if name is ""
+            return no
+        end
+    end
+    return yes
+end
+
+# whether the text is a web address: http:// or https://, then a name, with no spaces
+to is_address with words
+    set given to "" + words
+    set lower to lowercase of given
+    set rest to ""
+    if length of lower is greater than 7 and (items 1 to 7 of lower) is "http://"
+        set rest to items 8 to length of given of given
+    else if length of lower is greater than 8 and (items 1 to 8 of lower) is "https://"
+        set rest to items 9 to length of given of given
+    else
+        return no
+    end
+    if validate_has_space(given) or item 1 of rest is "/" or item 1 of rest is "?" or item 1 of rest is "#"
+        return no
+    end
+    return yes
+end
+
+to validate_has_space with words
+    for each c in words
+        if c is " " or c is "\t" or c is "\n"
+            return yes
+        end
+    end
+    return no
+end
+
+# a date written 2026-11-04, as a record of its year, month and day, as dates.moth makes them; or nothing
+to validate_date with words
+    set parts to split words by "-"
+    if length of parts is not 3 or length of item 1 of parts is not 4 or length of item 2 of parts is not 2
+        or length of item 3 of parts is not 2
+        return nothing
+    end
+    set numbers to empty list
+    for each part in parts
+        for each c in part
+            if not (c is in "0123456789")
+                return nothing
+            end
+        end
+        add number of part to numbers
+    end
+    set year to item 1 of numbers
+    set month to item 2 of numbers
+    set day to item 3 of numbers
+    if month is less than 1 or month is greater than 12 or day is less than 1
+        return nothing
+    end
+    set days to list of 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+    set most to item month of days
+    if month is 2 and (remainder of year divided by 4 is 0 and remainder of year divided by 100 is not 0
+        or remainder of year divided by 400 is 0)
+        set most to 29
+    end
+    if day is greater than most
+        return nothing
+    end
+    return record with year year, month month, day day
+end
+
+# ---------- helpers ----------
+
+# a value as JSON has it, so a record's fields can be found by name
+to validate_plain with given
+    if given is nothing
+        return empty dictionary
+    end
+    try
+        return json from (given as json)
+    if it fails with why
+        fail with "can't check these values: " + why
+    end
+end
+
+# what a plain value is: "nothing", "yes or no", "number", "text", "dictionary" or "list"
+to validate_sort with value
+    if value is nothing
+        return "nothing"
+    else if value is yes or value is no
+        return "yes or no"
+    end
+    try
+        if value - 0 is value
+            return "number"
+        end
+    if it fails
+        try
+            if length of keys of value is at least 0
+                return "dictionary"
+            end
+        if it fails
+            try
+                if uppercase of value is not nothing
+                    return "text"
+                end
+            if it fails
+                return "list"
+            end
+        end
+    end
+    return "list"
+end
+
+# a, b or c
+to validate_listed with things, joining
+    set shown to empty list
+    for each thing in things
+        add "" + thing to shown
+    end
+    if length of shown is 0
+        return ""
+    else if length of shown is 1
+        return item 1 of shown
+    end
+    return (join (items 1 to length of shown - 1 of shown) with ", ") + " " + joining + " " + item (length of shown)
+        of shown
+end
+
+to validate_trimmed with words
+    set from to 1
+    set upto to length of words
+    repeat while from is at most upto and (item from of words is " " or item from of words is "\t"
+        or item from of words is "\n")
+        add 1 to from
+    end
+    repeat while upto is at least from and (item upto of words is " " or item upto of words is "\t"
+        or item upto of words is "\n")
+        set upto to upto - 1
+    end
+    if from is greater than upto
+        return ""
+    end
+    return items from to upto of words
+end
