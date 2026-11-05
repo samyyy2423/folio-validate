@@ -1,11 +1,11 @@
 # validate
 
-Checks for what a [Moth](https://github.com/samyyy2423/moth) program is given (a form's fields, JSON a request
+Checks for what a [Folio](https://github.com/samyyy2423/folio) program is given (a form's fields, JSON a request
 sent, a settings file), with a message for each field that's wrong, and the values made the kinds they should
-be: `"42"` from a form is 42, `"on"` from a checkbox is `yes`. In Moth alone, so it works everywhere Moth does.
+be: `"42"` from a form is 42, `"on"` from a checkbox is `yes`. In Folio alone, so it works everywhere Folio does.
 
 ```text
-moth add validate
+folio add validate
 ```
 
 ```
@@ -43,13 +43,13 @@ set person to result's values    # "age" is 20, a number; "news" is no when the 
 | `optional(rules, name, kind, otherwise)` | a field that may be left out or empty: its value is then `otherwise` (`nothing` if none is given) |
 | `at_most(rules, name, n)`, `at_least(rules, name, n)` | text of at most (or at least) n letters, a number at most n, or a list of at most n items |
 | `one_of(rules, name, choices)` | one of these values |
-| `check(rules, name, f, why)` | any check: `f(value)` gives yes when it's right, and `why` says what's wrong; with `text.moth`, a pattern: `function with v gives text's matches("^[A-Z]{3}$", v)`, `"must be three capital letters"` |
+| `check(rules, name, f, why)` | any check: `f(value)` gives yes when it's right, and `why` says what's wrong; with `text.folio`, a pattern: `function with v gives text's matches("^[A-Z]{3}$", v)`, `"must be three capital letters"` |
 | `message(rules, name, words)` | words said instead of any of that field's messages |
 | `checked(rules, given)` | a record of `ok`, `values` (each field made its kind), `problems` (each wrong field's message, in order) and `first_problem` |
 | `is_email(words)`, `is_address(words)` | one value checked |
 
 A field's kind is `"text"`, `"number"`, `"whole number"`, `"yes or no"`, `"email"`, `"address"` (an http:// or
-https:// one), `"date"` (`"2026-11-04"`, made a date as `dates.moth` makes them), `"list"`, `"dictionary"`,
+https:// one), `"date"` (`"2026-11-04"`, made a date as `dates.folio` makes them), `"list"`, `"dictionary"`,
 `"any"`, or rules of their own, for a field that holds a record: its problems are named `home.town`.
 
 Text is taken with the spaces at its ends left out, and a needed field that's empty text is missing, as a form
@@ -59,9 +59,9 @@ asked for.
 ## Tests
 
 ```text
-moth test validate.test.moth
+folio test validate.test.folio
 ```
 
 ## License
 
-Apache License 2.0, as Moth is: see [LICENSE](LICENSE).
+Apache License 2.0, as Folio is: see [LICENSE](LICENSE).

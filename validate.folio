@@ -1,6 +1,6 @@
 # Checks for what a program is given (a form's fields, JSON a request sent, a settings file), with a message
 # for each field that's wrong, and the values made the kinds they should be: "42" from a form is 42, "on" from
-# a checkbox is yes. In Moth alone, so it works everywhere.
+# a checkbox is yes. In Folio alone, so it works everywhere.
 #
 #   use the package "validate" as validate
 #   set rules to validate's rules()
@@ -25,7 +25,7 @@
 #   end
 #
 # A field's kind is "text", "number", "whole number", "yes or no", "email", "address" (an http:// or https://
-# one), "date" ("2026-11-04", made a date as dates.moth makes them), "list", "dictionary", "any", or rules of
+# one), "date" ("2026-11-04", made a date as dates.folio makes them), "list", "dictionary", "any", or rules of
 # their own, for a field that holds a record or dictionary: its problems are named "outer.inner". Text is taken
 # with the spaces at its ends left out, and a needed field that's empty text is missing, as a form sends one.
 # message(rules, name, words) puts words in place of every message for that field. Fields the rules don't
@@ -361,7 +361,7 @@ to validate_has_space with words
     return no
 end
 
-# a date written 2026-11-04, as a record of its year, month and day, as dates.moth makes them; or nothing
+# a date written 2026-11-04, as a record of its year, month and day, as dates.folio makes them; or nothing
 to validate_date with words
     set parts to split words by "-"
     if length of parts is not 3 or length of item 1 of parts is not 4 or length of item 2 of parts is not 2

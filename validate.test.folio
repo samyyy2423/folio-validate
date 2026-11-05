@@ -1,7 +1,7 @@
-# validate.moth's tests: moth test validate.test.moth
+# validate.folio's tests: folio test validate.test.folio
 
-use "validate.moth" as validate
-use "text.moth" as text
+use "validate.folio" as validate
+use "text.folio" as text
 
 to signup_rules
     set rules to validate's rules()
